@@ -1,0 +1,61 @@
+@import './styles/tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: var(--font-primary);
+    background-color: var(--bg-base);
+    color: var(--fg-primary);
+  }
+  body {
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  #root {
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 disabled:opacity-50;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-md bg-surface-raised px-4 py-2 text-sm font-medium text-fg-primary transition-colors hover:bg-surface-overlay border border-border-default disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium text-fg-secondary transition-colors hover:bg-surface-raised hover:text-fg-primary disabled:opacity-50;
+  }
+  .input-field {
+    @apply flex h-10 w-full rounded-md border border-border-default bg-bg-input px-3 py-2 text-sm text-fg-primary placeholder:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 focus-visible:ring-offset-bg-base disabled:opacity-50;
+  }
+  .card-surface {
+    @apply rounded-lg border border-border-default bg-surface p-4 shadow-sm transition-colors;
+  }
+  .card-hover {
+    @apply card-surface hover:border-border-hover hover:bg-surface-raised;
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+}

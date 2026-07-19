@@ -1,0 +1,503 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id           String    @id
+  name         String
+  slug         String    @unique
+  plan         String    @default("free")
+  status       String    @default("active")
+  settings     Json      @default("{}")
+  limits       Json      @default("{}")
+  billingEmail String?   @map("billing_email")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  users        User[]
+  projects     Project[]
+  documents    Document[]
+  annotations  Annotation[]
+  notes        Note[]
+  aiConversations AIConversation[]
+  knowledgeGraphNodes KnowledgeGraphNode[]
+  knowledgeGraphEdges KnowledgeGraphEdge[]
+  citations    Citation[]
+  exports      Export[]
+  activityLogs ActivityLog[]
+  documentChunks DocumentChunk[]
+
+  @@map("tenants")
+}
+
+model User {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id")
+  externalId  String?   @map("external_id")
+  email       String
+  password    String?
+  name        String?
+  avatarUrl   String?   @map("avatar_url")
+  role        String    @default("member")
+  preferences Json    @default("{}")
+  lastSeenAt  DateTime? @map("last_seen_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  projects    Project[] @relation("ProjectCreatedBy")
+  collaborators ProjectCollaborator[]
+  annotations Annotation[]
+  notes       Note[]
+  aiConversations AIConversation[]
+  exports     Export[]
+  activityLogs ActivityLog[]
+  userSettings UserSettings?
+  knowledgeGraphNodes KnowledgeGraphNode[]
+  citations   Citation[]
+  documents   Document[] @relation("DocumentCreatedBy")
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([email])
+  @@map("users")
+}
+
+model Project {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id")
+  name        String
+  description String?
+  icon        String?
+  color       String?
+  settings    Json      @default("{}")
+  isArchived  Boolean   @default(false) @map("is_archived")
+  createdBy   String    @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  creator     User      @relation(fields: [createdBy], references: [id], name: "ProjectCreatedBy")
+  collaborators ProjectCollaborator[]
+  documents   Document[]
+  annotations Annotation[]
+  notes       Note[]
+  aiConversations AIConversation[]
+  knowledgeGraphNodes KnowledgeGraphNode[]
+  knowledgeGraphEdges KnowledgeGraphEdge[]
+  citations   Citation[]
+  exports     Export[]
+  activityLogs ActivityLog[]
+  documentChunks DocumentChunk[]
+
+  @@index([tenantId])
+  @@index([createdBy])
+  @@map("projects")
+}
+
+model ProjectCollaborator {
+  id        String    @id @default(uuid())
+  projectId String    @map("project_id")
+  userId    String    @map("user_id")
+  role      String    @default("editor")
+  invitedBy String?   @map("invited_by")
+  invitedAt DateTime  @default(now()) @map("invited_at")
+  acceptedAt DateTime? @map("accepted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_collaborators")
+}
+
+model Document {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  projectId       String    @map("project_id")
+  title           String
+  description     String?
+  authors         String[]
+  sourceUrl       String?   @map("source_url")
+  doi             String?
+  isbn            String?
+  publicationDate DateTime? @map("publication_date") @db.Date
+  publisher       String?
+  pageCount       Int?      @map("page_count")
+  fileSize        Int?      @map("file_size")
+  fileType        String    @default("application/pdf") @map("file_type")
+  storageKey      String    @map("storage_key")
+  storageBucket   String    @default("default") @map("storage_bucket")
+  thumbnailKey    String?   @map("thumbnail_key")
+  metadata        Json      @default("{}")
+  processingStatus String   @default("pending") @map("processing_status")
+  processingError String?   @map("processing_error")
+  language        String    @default("en")
+  tags            String[]
+  isFavorite      Boolean   @default(false) @map("is_favorite")
+  lastReadAt      DateTime? @map("last_read_at")
+  lastReadPage    Int       @default(1) @map("last_read_page")
+  createdBy       String    @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator     User      @relation(fields: [createdBy], references: [id], name: "DocumentCreatedBy")
+  pages       DocumentPage[]
+  chunks      DocumentChunk[]
+  annotations Annotation[]
+  citations   Citation[]
+  knowledgeGraphNodes KnowledgeGraphNode[]
+
+  @@index([tenantId, projectId])
+  @@index([processingStatus])
+  @@index([doi])
+  @@index([tags])
+  @@map("documents")
+}
+
+model DocumentPage {
+  id            String    @id @default(uuid())
+  documentId    String    @map("document_id")
+  pageNumber    Int       @map("page_number")
+  textContent   String?   @map("text_content")
+  textLayer     Json?     @map("text_layer")
+  ocrText       String?   @map("ocr_text")
+  thumbnailKey  String?   @map("thumbnail_key")
+  width         Float?
+  height        Float?
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  document      Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunks        DocumentChunk[]
+
+  @@unique([documentId, pageNumber])
+  @@index([documentId])
+  @@map("document_pages")
+}
+
+model DocumentChunk {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+  projectId     String    @map("project_id")
+  documentId    String    @map("document_id")
+  pageId        String?   @map("page_id")
+  pageNumber    Int       @map("page_number")
+  chunkIndex    Int       @map("chunk_index")
+  textContent   String    @map("text_content")
+  metadata      Json      @default("{}")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document      Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  page          DocumentPage? @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, pageNumber, chunkIndex])
+  @@index([tenantId, projectId])
+  @@index([documentId])
+  @@map("document_chunks")
+}
+
+model Annotation {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  projectId       String    @map("project_id")
+  documentId      String    @map("document_id")
+  userId          String    @map("user_id")
+  type            String
+  pageNumber      Int       @map("page_number")
+  boundingBox     Json      @map("bounding_box")
+  quadPoints      Json?     @map("quad_points")
+  inkList         Json?     @map("ink_list")
+  color           String    @default("#FFEB3B")
+  textContent     String?   @map("text_content")
+  noteContent     String?   @map("note_content")
+  aiSummary       String?   @map("ai_summary")
+  aiTags          String[]  @map("ai_tags")
+  extractedEntities String[] @map("extracted_entities")
+  sentiment       String?
+  resolvedAt      DateTime? @map("resolved_at")
+  resolvedBy      String?   @map("resolved_by")
+  version         Int       @default(1)
+  isDeleted       Boolean   @default(false) @map("is_deleted")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document        Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id])
+  knowledgeGraphNodes KnowledgeGraphNode[]
+
+  @@index([tenantId, projectId])
+  @@index([documentId])
+  @@index([userId])
+  @@index([documentId, pageNumber])
+  @@map("annotations")
+}
+
+model Note {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  projectId       String    @map("project_id")
+  userId          String    @map("user_id")
+  title           String?
+  content         String
+  plainText       String?   @map("plain_text")
+  color           String    @default("#ffffff")
+  icon            String?
+  tags            String[]
+  linkedDocumentIds String[] @map("linked_document_ids")
+  linkedAnnotationIds String[] @map("linked_annotation_ids")
+  linkedNoteIds   String[]  @map("linked_note_ids")
+  canvasPosition  Json?     @map("canvas_position")
+  isPinned        Boolean   @default(false) @map("is_pinned")
+  isArchived      Boolean   @default(false) @map("is_archived")
+  version         Int       @default(1)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id])
+  knowledgeGraphNodes KnowledgeGraphNode[]
+
+  @@index([tenantId, projectId])
+  @@index([userId])
+  @@index([tags])
+  @@map("notes")
+}
+
+model AIConversation {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  projectId       String    @map("project_id")
+  userId          String    @map("user_id")
+  title           String?
+  model           String    @default("gpt-4o")
+  systemPrompt    String?   @map("system_prompt")
+  contextDocuments String[]  @map("context_documents")
+  contextAnnotations String[] @map("context_annotations")
+  metadata        Json      @default("{}")
+  isPinned        Boolean   @default(false) @map("is_pinned")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id])
+  messages        AIMessage[]
+
+  @@index([projectId])
+  @@index([userId])
+  @@map("ai_conversations")
+}
+
+model AIMessage {
+  id              String    @id @default(uuid())
+  conversationId String    @map("conversation_id")
+  role            String
+  content         String
+  citations       Json?
+  toolCalls       Json?     @map("tool_calls")
+  tokensInput     Int?      @map("tokens_input")
+  tokensOutput    Int?      @map("tokens_output")
+  latencyMs       Int?      @map("latency_ms")
+  model           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  conversation    AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("ai_messages")
+}
+
+model KnowledgeGraphNode {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  projectId       String    @map("project_id")
+  userId          String    @map("user_id")
+  nodeType        String    @map("node_type")
+  label           String
+  content         String?
+  metadata        Json      @default("{}")
+  canvasPosition  Json?     @map("canvas_position")
+  canvasSize      Json?     @map("canvas_size")
+  color           String?
+  sourceDocumentId String?  @map("source_document_id")
+  sourceAnnotationId String? @map("source_annotation_id")
+  sourceNoteId    String?   @map("source_note_id")
+  aiConfidence    Float?    @map("ai_confidence")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id])
+  sourceDocument  Document? @relation(fields: [sourceDocumentId], references: [id])
+  sourceAnnotation Annotation? @relation(fields: [sourceAnnotationId], references: [id])
+  sourceNote      Note?     @relation(fields: [sourceNoteId], references: [id])
+  outgoingEdges   KnowledgeGraphEdge[] @relation("SourceNode")
+  incomingEdges   KnowledgeGraphEdge[] @relation("TargetNode")
+
+  @@index([projectId])
+  @@index([nodeType])
+  @@index([sourceDocumentId])
+  @@map("knowledge_graph_nodes")
+}
+
+model KnowledgeGraphEdge {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  projectId       String    @map("project_id")
+  sourceId        String    @map("source_id")
+  targetId        String    @map("target_id")
+  edgeType        String    @map("edge_type")
+  label           String?
+  metadata        Json      @default("{}")
+  strength        Float?
+  aiConfidence    Float?    @map("ai_confidence")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceNode      KnowledgeGraphNode @relation(fields: [sourceId], references: [id], onDelete: Cascade, name: "SourceNode")
+  targetNode      KnowledgeGraphNode @relation(fields: [targetId], references: [id], onDelete: Cascade, name: "TargetNode")
+
+  @@unique([sourceId, targetId, edgeType])
+  @@index([projectId])
+  @@index([sourceId])
+  @@index([targetId])
+  @@map("knowledge_graph_edges")
+}
+
+model Citation {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  projectId       String    @map("project_id")
+  documentId      String?   @map("document_id")
+  type            String    @default("article-journal")
+  title           String
+  author          Json?
+  editor          Json?
+  containerTitle  String?   @map("container_title")
+  publisher       String?
+  publisherPlace  String?   @map("publisher_place")
+  volume          String?
+  issue           String?
+  page            String?
+  edition         String?
+  DOI             String?
+  ISBN            String?
+  ISSN            String?
+  URL             String?
+  accessed        DateTime?
+  issued          Json?
+  abstract        String?
+  keywords        String[]
+  citedInDocuments String[] @map("cited_in_documents")
+  citedInNotes    String[]  @map("cited_in_notes")
+  autoExtracted   Boolean   @default(false) @map("auto_extracted")
+  verified        Boolean   @default(false)
+  verificationSource String? @map("verification_source")
+  createdBy       String    @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document        Document? @relation(fields: [documentId], references: [id])
+  creator         User      @relation(fields: [createdBy], references: [id])
+
+  @@index([tenantId, projectId])
+  @@index([DOI])
+  @@index([documentId])
+  @@map("citations")
+}
+
+model Export {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  projectId       String    @map("project_id")
+  userId          String    @map("user_id")
+  name            String
+  format          String
+  scope           String
+  scopeIds        String[]  @map("scope_ids")
+  configuration   Json      @default("{}")
+  status          String    @default("queued")
+  errorMessage    String?   @map("error_message")
+  fileKey         String?   @map("file_key")
+  fileSize        Int?      @map("file_size")
+  downloadUrl     String?   @map("download_url")
+  expiresAt       DateTime? @map("expires_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  completedAt     DateTime? @map("completed_at")
+
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id])
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([status])
+  @@map("exports")
+}
+
+model ActivityLog {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  projectId       String?   @map("project_id")
+  userId          String?   @map("user_id")
+  action          String
+  entityType      String    @map("entity_type")
+  entityId        String?   @map("entity_id")
+  metadata        Json      @default("{}")
+  ipAddress       String?   @map("ip_address")
+  userAgent       String?   @map("user_agent")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project         Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([projectId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@map("activity_log")
+}
+
+model UserSettings {
+  id                      String    @id @default(uuid())
+  userId                  String    @unique @map("user_id")
+  theme                   String    @default("system")
+  fontSize                Int       @default(14) @map("font_size")
+  pdfViewerMode           String    @default("continuous") @map("pdf_viewer_mode")
+  defaultCitationStyle    String    @default("apa-7") @map("default_citation_style")
+  defaultExportFormat     String    @default("pdf") @map("default_export_format")
+  aiModel                 String    @default("gpt-4o") @map("ai_model")
+  aiTemperature           Float     @default(0.7) @map("ai_temperature")
+  sidebarCollapsed        Boolean   @default(false) @map("sidebar_collapsed")
+  shortcuts               Json      @default("{}")
+  notificationPreferences Json      @default("{}") @map("notification_preferences")
+  privacySettings         Json      @default("{}") @map("privacy_settings")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
